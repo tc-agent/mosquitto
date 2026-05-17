@@ -65,5 +65,47 @@ def gen_packet_corpus(packet_type, input_path):
                             fuzzi += 1
     shutil.make_archive(f"corpora/{packet_type}_packet_seed_corpus", 'zip', f"corpora/{packet_type}")
 
+def gen_session_corpus(corpus_name, input_path):
+    # broker_fuzz_with_init drives a real broker over a socket, so a seed is
+    # one client's whole byte stream. Concatenate every client->broker
+    # ("send") packet of a test into a single realistic session
+    # (CONNECT, SUBSCRIBE, PUBLISH, ...).
+    try:
+        mkdir("corpora")
+    except FileExistsError:
+        pass
+    try:
+        mkdir(f"corpora/{corpus_name}")
+    except FileExistsError:
+        pass
+
+    data_path = Path(input_path)
+    sequences = []
+    for (_, _, filenames) in walk(data_path):
+        sequences.extend(filenames)
+        break
+
+    written = {}
+    for seq in sorted(sequences):
+        if seq[-5:] != ".json":
+            continue
+        with open(data_path/seq, "r") as f:
+            test_file = json.load(f)
+        for g in test_file:
+            for t in g["tests"]:
+                stream = b""
+                for m in t["msgs"]:
+                    if m["type"] == "send":
+                        stream += msg_sequence_test.parse_message(m["payload"])
+                if stream and stream not in written:
+                    written[stream] = 1
+                    fname = re.sub(r'[\/ \[\]\(\)]+', '-',
+                                   g["group"] + " " + t["name"]) + ".raw"
+                    with open(f"corpora/{corpus_name}/{fname}", "wb") as f:
+                        f.write(stream)
+    shutil.make_archive(f"corpora/{corpus_name}_seed_corpus", 'zip',
+                        f"corpora/{corpus_name}")
+
 gen_packet_corpus("broker", "../test/broker/data")
 gen_packet_corpus("client", "../test/lib/data")
+gen_session_corpus("broker_fuzz_with_init", "../test/broker/data")

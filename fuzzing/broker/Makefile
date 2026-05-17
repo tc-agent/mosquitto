@@ -11,7 +11,8 @@ FUZZERS:= \
 	broker_fuzz_psk_file \
 	broker_fuzz_queue_msg \
 	broker_fuzz_read_handle \
-	broker_fuzz_test_config
+	broker_fuzz_test_config \
+	broker_fuzz_with_init
 
 LOCAL_CPPFLAGS+=-I${R}/include/ -I${R}/src -I${R}/lib -I${R} -I${R}/common -I${R}/deps \
 	-DWITH_BRIDGE -DWITH_BROKER -DWITH_CONTROL -DWITH_EPOLL \
@@ -80,6 +81,14 @@ broker_fuzz_test_config : broker_fuzz_test_config.cpp ${R}/src/mosquitto_broker.
 	install $@ ${OUT}/$@
 	cp ${R}/fuzzing/corpora/broker_fuzz_test_config_seed_corpus.zip ${OUT}/$@_seed_corpus.zip
 	cp ${R}/fuzzing/corpora/broker_conf.dict ${OUT}/$@.dict
+
+run_client.o : run_client.cpp
+	$(CXX) $(LOCAL_CXXFLAGS) $(LOCAL_CPPFLAGS) -c -o $@ $<
+
+broker_fuzz_with_init : broker_fuzz_with_init.cpp run_client.o ${R}/src/mosquitto_broker.a
+	$(CXX) $(LOCAL_CXXFLAGS) $(LOCAL_CPPFLAGS) $(LOCAL_LDFLAGS) -o $@ broker_fuzz_with_init.cpp run_client.o $(BROKER_A) $(LOCAL_LIBADD)
+	install $@ ${OUT}/$@
+	cp ${R}/fuzzing/corpora/broker_fuzz_with_init_seed_corpus.zip ${OUT}/$@_seed_corpus.zip
 
 clean:
 	rm -f *.o $(FUZZERS) $(PACKET_FUZZERS)
